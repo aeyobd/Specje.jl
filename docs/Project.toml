@@ -1,0 +1,9 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Specje = "86a09f1c-c7a3-11f1-baad-a3ebf6911431"
+
+[sources]
+Specje = {path = ".."}
+
+[compat]
+Documenter = "1"
