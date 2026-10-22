@@ -86,7 +86,7 @@ end
 
 # ---------------------------------------------------------------- stellar
 """
-    StellarComponent(grid, templates; σ_min=0, σ_max=1000, vmax=2000, σ_templ=0, phot=nothing)
+    StellarComponent(grid, templates; σ_min=σ_templ, σ_max=1000, vmax=2000, σ_templ=0, phot=nothing)
 
 A block of templates sharing one Gaussian LOSVD, θ = (v, σ) in km/s. `templates` must
 be on the template grid that `grid` was built for. `phot` (a `BandTemplates` from
@@ -98,7 +98,8 @@ reject wild steps (keep `vmax + 5σ_max` below the grid's `margin_kms`).
 (constant) width, so the kernel applied is `√(σ² − σ_templ²)` and the fitted σ stays the
 full LOSVD width. Use it when the instrument is applied after the convolution (a
 resolution-matrix projection) and the templates have been brought to a constant
-velocity resolution; it requires `σ_min ≥ σ_templ`.
+velocity resolution (e.g. by `match_resolution_auto`); it requires `σ_min ≥ σ_templ`,
+and `σ_min` defaults to `σ_templ`.
 """
 struct StellarComponent{T<:AbstractFloat} <: Component
     ft::Matrix{Complex{T}}
@@ -112,8 +113,11 @@ end
 
 
 function StellarComponent(grid::KinematicsGrid{T}, templates::AbstractMatrix{<:Real};
-                          σ_min::Real=0.0, σ_max::Real=1000.0, vmax::Real=2000.0,
-                          σ_templ::Real=0.0, phot=nothing) where {T}
+                          σ_min::Union{Nothing,Real}=nothing, σ_max::Real=1000.0,
+                          vmax::Real=2000.0, σ_templ::Real=0.0, phot=nothing) where {T}
+    if isnothing(σ_min)
+        σ_min = σ_templ          # the templates already have that width
+    end
     if σ_templ < 0
         throw(ArgumentError("σ_templ must be ≥ 0"))
     end

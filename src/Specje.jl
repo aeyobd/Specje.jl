@@ -49,6 +49,7 @@ export LSF, GaussianLSF, BandedLSF, fwhm_to_sigma_kms, sigma_kms_to_fwhm
 export inst_sigma_kms, apply_banded, dense_matrix, normalize_rows
 export banded_gaussian, banded_from_dia, to_banded
 export sigma_diff_kms, match_resolution, library_sigma_kms
+export match_resolution_auto, minimum_sigma_templ, resolution_deficit_kms
 export gaussian_losvd_ft
 export KinematicsGrid, kinematics_grid, shift_pixels
 export transform_templates, convolve_templates, convolve_blocks

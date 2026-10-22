@@ -30,9 +30,10 @@ Widen `λmin`/`λmax` when rebinning the library, crop the data, or lower `margi
 [`kinematics_grid`](@ref) (but keep it above `vmax + 5σ_max`).
 
 **`templates are broader than the data in N pixels`** (from `match_resolution`)
-The data have better resolution than the library in those pixels. Use a
-higher-resolution library, crop to where the library is sharp enough, or pass
-`strict=false`. With `strict=false` the fitted σ is biased low there.
+The data have better resolution than the library in those pixels. Use
+`match_resolution_auto`, which folds the deficit into the LOSVD and fits exactly for
+galaxies with σ above `minimum_sigma_templ`. `strict=false` also runs, but biases σ
+low (see [Libraries broader than the data](guide/resolution.md#Libraries-broader-than-the-data)).
 
 **`initial σ must exceed σ_min`**
 Starting values must satisfy `σ > σ_min` for every stellar component and gas group.

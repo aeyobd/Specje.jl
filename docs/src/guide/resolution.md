@@ -100,12 +100,17 @@ variance, enough to lower σ★ by ≈ 4% at 50 km/s (much less at higher σ).
   **constant in velocity**, σ_templ, and declare it:
 
 ```julia
-σ_templ = maximum(library_sigma_kms(tlib))        # the library's coarsest resolution
-T    = match_resolution(tlib, σ_templ)            # now σ_templ km/s at every wavelength
-star = StellarComponent(grid, T; σ_templ=σ_templ, σ_min=σ_templ, σ_max=600.0, vmax=1000.0)
+m    = match_resolution_auto(tlib, mwave)          # no LSF: R applies the instrument
+star = StellarComponent(grid, m.templates; σ_templ=m.σ_templ, σ_max=600.0, vmax=1000.0)
 gas  = GasComponent(mwave, groups; σ_min=5.0, vmax=800.0)
 model = SpectralModel(grid, star, gas, PolynomialComponent(length(mwave), 4); projection=P)
 ```
+
+Without an LSF, [`match_resolution_auto`](@ref) brings the library to its coarsest
+resolution *over the data's wavelength range*, constant in velocity, and returns that
+σ_templ (`σ_min` defaults to it). You can also do this by hand:
+`σ_templ = maximum(library_sigma_kms(tlib))` and `match_resolution(tlib, σ_templ)`,
+which uses the whole template range, margins included.
 
 The LOSVD kernel then has width `√(σ² − σ_templ²)`, so the fitted σ is the galaxy's
 full dispersion.
@@ -121,6 +126,30 @@ enforced). That is a property of the library, not of the method: a library broad
 than the galaxy's lines can't measure them. With MILES (2.5 Å FWHM), σ_templ ≈ 64 km/s
 at 5000 Å, but ≈ 88 km/s if the fit extends to 3600 Å. Restricting the wavelength
 range, or using a sharper library, lowers it.
+
+With a resolution matrix the whole library width counts, because R is applied on top
+of it. If that σ_templ is too large for your galaxies, the alternative is to drop R
+from the projection and match to its effective Gaussian width instead:
+
+```julia
+edges     = Specje.native_pixel_edges(spec.wave)
+pixel_kms = C_KMS .* diff(log.(edges))              # each native pixel's width in km/s
+σ_R       = inst_sigma_kms(R, 1.0) .* pixel_kms     # R's effective σ, pixel by pixel
+# R's first and last rows are truncated, so they look sharper than the instrument:
+# give them the width of the nearest complete row
+half = maximum(abs, R.offsets)
+σ_R[1:half] .= σ_R[half + 1]
+σ_R[end-half+1:end] .= σ_R[end-half]
+m = match_resolution_auto(tlib, mwave, GaussianLSF(Specje.sigma_on_grid(σ_R, spec.wave, mwave)))
+P = pixel_projection(mwave, spec.wave)              # no resolution= here
+```
+
+The conversion is per pixel because linear pixels, like DESI's, change width in km/s
+along the spectrum. Without the edge fix, the truncated rows create a large spurious
+deficit at both ends, and σ_c would be set by them.
+
+This only costs the *deficit* `√(σ_lib² − σ_R²)` (next section), at the price of
+treating R as a Gaussian.
 
 ## Matching templates to the data
 
@@ -142,8 +171,57 @@ T = match_resolution(tlib, data.wave, lsf; strict=true)
 - A `BandedLSF` enters through its effective Gaussian σ (`inst_sigma_kms`).
 - With `strict=true` (the default), an error is raised wherever the templates are
   *broader* than the data, i.e. where the data have better resolution than the library
-  and can't be matched by smoothing. With `strict=false` those pixels are left
-  unsmoothed, and the fitted σ there is biased low.
+  and can't be matched by smoothing. Equal resolutions (to 1 part in 10⁹) are not
+  broader. With `strict=false` those pixels are left unsmoothed, and the fitted σ is
+  biased low (see below). For these cases use `match_resolution_auto` instead.
+- The smoothing adds exactly `σ_diff²` of variance: the kernel's pixel-integrated
+  weights would add another 1/12 px², which is subtracted first.
+
+## Libraries broader than the data
+
+No current SSP library is sharper than every modern spectrograph everywhere. Where the
+library is broader, the deficit
+
+```
+d(λ) = √(σ_lib² − σ_data²)
+```
+
+can't be removed by smoothing, but it can be folded into the LOSVD. Choose one constant
+σ_c ≥ max d (constant because the LOSVD kernel has one width in velocity), bring the
+templates to `√(σ_data² + σ_c²)` at every wavelength (never sharper than the library,
+so always possible), and fit with a kernel of width `√(σ² − σ_c²)`:
+
+```julia
+m    = match_resolution_auto(tlib, mwave, lsf)     # (templates=…, σ_templ=σ_c)
+star = StellarComponent(grid, m.templates; σ_templ=m.σ_templ, σ_max=600.0, vmax=1000.0)
+```
+
+The fitted σ is then the galaxy's intrinsic dispersion, exactly, for any σ ≥ σ_c, and
+`σ_min` defaults to σ_c. [`minimum_sigma_templ`](@ref)`(tlib, mwave, lsf)` gives σ_c
+alone; only library pixels inside the data's wavelength range count. Pass
+`σ_templ=…` to use a larger value; a smaller one is refused. When the library is
+sharper everywhere, σ_c = 0 and the result is the same as `match_resolution`.
+
+For example, MILES (2.5 Å FWHM, σ_lib ≈ 33.5 km/s at 9500 Å) against data with a 0.8 Å
+FWHM (≈ 10.7 km/s) at 9500 Å has a deficit of ≈ 32 km/s there. Ignoring it
+(`strict=false`) gives `σ_fit ≈ √(σ_true² − d²)`, with d varying along the spectrum:
+
+| true σ | fitted σ with `strict=false` |
+|---|---|
+| 50 km/s | ≈ 39 km/s (−23 %) |
+| 100 km/s | ≈ 95 km/s (−5 %) |
+| 200 km/s | ≈ 197 km/s (−1.3 %) |
+
+In the tests, a library at 60 km/s against data at 30 km/s and a true σ of 90 km/s
+gives 90.00 with `match_resolution_auto` and 73.5 with `strict=false`.
+
+!!! note "σ_c is set by the worst wavelength"
+    A single wavelength where the library is much broader than the data raises σ_c
+    for the whole fit. [`resolution_deficit_kms`](@ref)`(tlib, mwave, lsf)` returns the
+    deficit at each wavelength, so you can see which ones set it. Check it before
+    fitting low-dispersion galaxies, and if needed restrict the fit to where the library
+    is sharp enough. Spuriously sharp LSF values, such as the truncated edge rows of a
+    resolution matrix, show up there as spikes.
 
 A lower-level method works on any template matrix:
 

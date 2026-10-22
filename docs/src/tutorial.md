@@ -173,12 +173,12 @@ On the simulated data (truth `v = 80`, `σ = 180` km/s), one run gives
 
 ```
 data: 2400 native pixels; model grid: 5444 pixels at 14.15 km/s
-best fit θ = [73.7, 167.1, -41.5, 26.5],  χ²/N = 0.999
-posterior mean θ = [74.9, 166.9, -27.0, 160.9], sd = [5.2, 5.4, 163.9, 154.3]
+best fit θ = [73.7, 167.1, -41.6, 27.0],  χ²/N = 0.999
+posterior mean θ = [74.6, 167.6, -0.0, 229.1], sd = [4.9, 5.3, 153.3, 188.9]
 ```
 
 The simulated spectrum has no emission lines, so the gas parameters only reflect their
-priors. σ★ is about 2.4 standard deviations from the truth: this particular noise draw
+priors. σ★ is about 2.3 standard deviations from the truth: this particular noise draw
 is unlucky. Fitting a stellar + polynomial model to 30 noise draws of the same
-simulation gives σ★ = 179.9 on average, with a scatter of 5.65 km/s; the Δχ² = 1 error
-quoted by the fits is 5.74 km/s. Without noise the full model returns σ★ = 180.4.
+simulation gives σ★ = 179.8 on average, with a scatter of 5.65 km/s; the Δχ² = 1 error
+quoted by the fits is 5.74 km/s. Without noise the full model returns σ★ = 179.9.
